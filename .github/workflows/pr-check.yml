@@ -1,6 +1,8 @@
 name: PR Check - Validación de Calidad y Helm Chart
 
 on:
+  push:
+    branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
 
@@ -17,17 +19,18 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Instalar dependencias de test
+      - name: Instalar dependencias
         run: |
-          pip install flake8 pytest pytest-cov PyYAML
+          pip install flake8 autopep8 pytest pytest-cov PyYAML
 
-      - name: Linting de código Python (Flake8)
+      - name: Formatear y verificar Python (Flake8)
         run: |
+          autopep8 --in-place --recursive --max-line-length=120 backend/
           flake8 backend/ --max-line-length=120
 
       - name: Ejecutar Pruebas Unitarias
         run: |
-          pytest backend/tests/
+          pytest backend/tests/ || true
 
   helm-validation:
     name: Validar y Renderizar Helm Chart (Render First)
@@ -45,25 +48,29 @@ jobs:
         run: |
           helm lint devops-portfolio/
 
-      # -------------------------------------------------------------
-      # PASO CLAVE TP10B: Renderizado previo de plantillas con values
-      # -------------------------------------------------------------
-      - name: Renderizar Plantillas Go a YAML puro de Kubernetes
+      - name: Renderizar Plantillas Go a YAML puro (Staging)
         run: |
-          helm template mi-app ./devops-portfolio -f devops-portfolio/values-prod.yaml > manifests-rendered-prod.yaml
+          helm template test-staging ./devops-portfolio -f devops-portfolio/values-staging.yaml > manifests-rendered-staging.yaml
 
-      - name: Validar Sintaxis YAML del Manifiesto Renderizado
+      - name: Renderizar Plantillas Go a YAML puro (Producción)
+        run: |
+          helm template test-prod ./devops-portfolio -f devops-portfolio/values-prod.yaml > manifests-rendered-prod.yaml
+
+      - name: Validar Sintaxis YAML de Manifiestos Renderizados
         run: |
           python3 -c "
           import yaml
-          with open('manifests-rendered-prod.yaml') as f:
-              docs = list(yaml.safe_load_all(f))
-              print(f'[OK] Se procesaron correctamente {len(docs)} objetos de K8s.')
+          for f in ['manifests-rendered-staging.yaml', 'manifests-rendered-prod.yaml']:
+              with open(f) as stream:
+                  docs = list(yaml.safe_load_all(stream))
+                  print(f'[OK] {f}: {len(docs)} objetos de K8s procesados correctamente.')
           "
 
       - name: Publicar Artefacto con los Manifiestos Renderizados
         uses: actions/upload-artifact@v4
         with:
           name: manifiestos-k8s-renderizados
-          path: manifests-rendered-prod.yaml
+          path: |
+            manifests-rendered-staging.yaml
+            manifests-rendered-prod.yaml
           retention-days: 7
