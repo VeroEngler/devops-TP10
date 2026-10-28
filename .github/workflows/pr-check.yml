@@ -25,12 +25,25 @@ jobs:
 
       - name: Formatear y verificar Python (Flake8)
         run: |
-          autopep8 --in-place --recursive --max-line-length=120 backend/
-          flake8 backend/ --max-line-length=120
+          if [ -d "backend" ]; then
+            autopep8 --in-place --recursive --max-line-length=120 backend/
+            flake8 backend/ --max-line-length=120
+          elif [ -d "devops-portfolio/backend" ]; then
+            autopep8 --in-place --recursive --max-line-length=120 devops-portfolio/backend/
+            flake8 devops-portfolio/backend/ --max-line-length=120
+          else
+            echo "[INFO] No se encontró la carpeta backend/, omitiendo linting de código Python."
+          fi
 
       - name: Ejecutar Pruebas Unitarias
         run: |
-          pytest backend/tests/ || true
+          if [ -d "backend/tests" ]; then
+            pytest backend/tests/
+          elif [ -d "devops-portfolio/backend/tests" ]; then
+            pytest devops-portfolio/backend/tests/
+          else
+            echo "[INFO] No se encontraron pruebas unitarias, omitiendo pytest."
+          fi
 
   helm-validation:
     name: Validar y Renderizar Helm Chart (Render First)
